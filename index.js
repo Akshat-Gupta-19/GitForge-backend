@@ -78,17 +78,19 @@ function startServer(){
   .then(()=>console.log("MogoDB connected!"))
   .catch((err)=> console.log("Unable to connect : ",err));
 
-  app.use(cors({origin:"*"}));
+  app.use(cors({
+    origin: "https://main.d3h12raejvaw29.amplifyapp.com"
+  }));
   app.use("/",mainRouter);
 
   let user = "test";
   const httpServer = http.createServer(app);
-  const io = new Server(httpServer,{
-    cors : {
-      origin : "*",
-      methods : ["GET","POST"],
-    }
-  });
+  const io = new Server(httpServer, {
+  cors: {
+    origin: "https://main.d3h12raejvaw29.amplifyapp.com",
+    methods: ["GET", "POST"]
+  }
+});
 
   io.on("connection",(socket)=>{
     socket.on("joinRoom",(userID)=>{
