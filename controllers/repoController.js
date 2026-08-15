@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Repository = require("../models/repoModel");
 const User = require("../models/userModel");
 const Issue = require("../models/issueModel");
+const { s3, S3_BUCKET } = require("../config/aws-config");
 
 async function createRepository(req, res) {
   const { owner, name, issues, content, description, visibility } = req.body;
@@ -150,15 +151,66 @@ async function toggleVisibilityById(req, res) {
 async function deleteRepositoryById(req, res) {
   const { id } = req.params;
   try {
-    const repository = await Repository.findByIdAndDelete(id);
+    const repository = await Repository.findById(id);
     if (!repository) {
-      return res.status(404).json({ error: "Repository not found!" });
+      return res.status(404).json({
+        error: "Repository not found!",
+      });
     }
+    const prefix = `repositories/${id}/files/`;
+    let continuationToken = undefined;
+    let totalDeleted = 0;
+    do {
+      const listParams = {
+        Bucket: S3_BUCKET,
+        Prefix: prefix,
+        ...(continuationToken && {
+          ContinuationToken: continuationToken,
+        }),
+      };
+      const data = await s3
+        .listObjectsV2(listParams)
+        .promise();
 
-    res.json({ message: "Repository deleted successfully!" });
+      if (data.Contents && data.Contents.length > 0) {
+        const objects = data.Contents.map((item) => ({
+          Key: item.Key,
+        }));
+        await s3
+          .deleteObjects({
+            Bucket: S3_BUCKET,
+            Delete: {
+              Objects: objects,
+              Quiet: true,
+            },
+          })
+          .promise();
+
+        totalDeleted += objects.length;
+      }
+      continuationToken =
+        data.IsTruncated
+          ? data.NextContinuationToken
+          : undefined;
+
+    } while (continuationToken);
+
+    console.log(
+      `Deleted ${totalDeleted} S3 files for repository ${id}`
+    );
+    await Repository.findByIdAndDelete(id);
+    res.status(200).json({
+      message: "Repository and its files deleted successfully!",
+      deletedFiles: totalDeleted,
+    });
   } catch (err) {
-    console.error("Error during deleting repository : ", err.message);
-    res.status(500).send("Server error");
+    console.error(
+      "Error during repository deletion:",
+      err
+    );
+    res.status(500).json({
+      error: "Failed to delete repository",
+    });
   }
 }
 
