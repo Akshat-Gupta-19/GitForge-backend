@@ -42,12 +42,16 @@ async function uploadRepositoryFiles(req, res) {
       files: uploadedFiles,
     });
   } catch (err) {
-    console.error("Error uploading repository files:", err);
+  console.error("🔥 ACTUAL S3 ERROR:", err);
+  console.error("Code:", err.code);
+  console.error("Message:", err.message);
+  console.error("Status:", err.statusCode);
 
-    res.status(500).json({
-      error: "Failed to upload repository files",
-    });
-  }
+  res.status(500).json({
+    error: err.message || "Failed to upload repository files",
+    code: err.code,
+  });
+}
 }
 
 async function getRepositoryFiles(req, res) {
